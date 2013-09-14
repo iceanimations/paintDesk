@@ -25,11 +25,3 @@ class Window(QWidget):
             self.close()
         if event.key() == Qt.Key_S:
             self.paintArea.saveImage()
-        if event.key() == Qt.Key_Equal:
-            penSize = self.paintArea.penSize
-            if penSize < 20:
-                self.paintArea.setPenSize(penSize + 1)
-        if event.key() == Qt.Key_Minus:
-            penSize = self.paintArea.penSize
-            if penSize > 1:
-                self.paintArea.setPenSize(penSize - 1)
