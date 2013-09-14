@@ -7,25 +7,53 @@ import site
 site.addsitedir(r"R:/Python_Scripts")
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
+from PyQt4 import uic
+from .logic import utilities as util
+modulePath = util.modulePath(__name__)
+root = util.dirname(util.dirname(util.dirname(modulePath)))
+penPath = r"%s\icons\pen"%root
 
 class PaintArea(QLabel):
     def __init__(self, parent = None):
         super(PaintArea, self).__init__(parent)
-        pix = QPixmap(r"D:\My\icons & logos\paintDesk\pen\darkYellow.png")
-        pix = pix.scaled(100, 100, Qt.KeepAspectRatio)
-        cursor = QCursor(pix, 6, 94)
-        self.setCursor(cursor)
         self.modified = False
-        self.myPenColors = [QColor('green'), QColor('red'), QColor('blue')]
         self.image = QImage()
         self.mouseDown = False
         self.points = []
         self.pix = QPixmap.grabWindow(QApplication.desktop().winId())
         self.pix.save('D:/testImage.png', None, 100)
         self.setStyleSheet("background-image: url(D:/testImage.png)")
-        #self.pix2 = QPixmap(self.pix.size())
-        #self.pix2.fill(QColor(0, 0, 0, alpha = 100))
-        self.pen = QPen(Qt.yellow, 20, Qt.SolidLine)
+        self.colors = {'White': Qt.white, 'Black': Qt.black, 'Red': Qt.red,
+              'Dark Red': Qt.darkRed, 'Green': Qt.green,
+              'Dark Green': Qt.darkGreen, 'Blue': Qt.blue,
+              'Dark Blue': Qt.darkBlue, 'Cyan': Qt.cyan,
+              'Dark Cyan': Qt.darkCyan, 'Magenta': Qt.magenta,
+              'Dark Magenta': Qt.darkMagenta, 'Yellow': Qt.yellow,
+              'Dark Yellow': Qt.darkYellow}
+        self.penSize = 2
+        self.setPenColor('Yellow')
+        self.setPenSize(self.penSize)
+        
+        
+    def penColor(self, color):
+        return self.colors[color]
+        
+    def setPenColor(self, color):
+        self.penColor = self.penColor(color)
+        self.pen = QPen(self.penColor, self.penSize, Qt.SolidLine)
+        imageName = color + ".png"
+        path = util.join(penPath, imageName) 
+        self.cursorPixmap = QPixmap(path)
+    
+    def setPenSize(self, size):
+        self.penSize = size
+        self.pen = QPen(self.penColor, self.penSize, Qt.SolidLine)
+        size = int(round(size*4.2 + 12))
+        pix = self.cursorPixmap.scaled(size, size, Qt.KeepAspectRatio)
+        self.setCursor(QCursor(pix, 0, size))
+    
+    def undo(self):
+        pass
 
     def saveImage(self):
         painter = QPainter(self.pix)
@@ -41,12 +69,8 @@ class PaintArea(QLabel):
         return self.modified
     
     def clearImage(self):
-        self.image.fill(qRgb(255, 255, 255))
+        
         self.modified = True
-        self.update()
-    
-    def printImage(self):
-        pass
     
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -71,3 +95,45 @@ class PaintArea(QLabel):
         if self.mouseDown:
             point = event.pos()
             self.points.append(point)
+            
+Form, Base = uic.loadUiType('%s\ui\preferences.ui'%root)
+class Preferences(Form, Base):
+    
+    def __init__(self, parentWin = None):
+        super(Preferences, self).__init__(parentWin)
+        self.setupUi(self)
+            
+class Menu(QMenu):
+    
+    def __init__(self, parentWin = None):
+        super(Menu, self).__init__(parentWin)
+        
+def saveDialog():
+    pass
+
+def openDialog():
+    pass
+        
+def msgBox(parent, msg = None, btns = QMessageBox.Ok,
+           icon = None, ques = None, details = None, title = 'paintDesk'):
+    '''
+    dispalys the warnings
+    @params:
+            args: a dictionary containing the following sequence of variables
+            {'msg': 'msg to be displayed'[, 'ques': 'question to be asked'],
+            'btns': QMessageBox.btn1 | QMessageBox.btn2 | ....}
+    '''
+    if msg:
+        mBox = QMessageBox(parent)
+        mBox.setWindowModality(Qt.ApplicationModal)
+        mBox.setWindowTitle(title)
+        mBox.setText(msg)
+        if ques:
+            mBox.setInformativeText(ques)
+        if icon:
+            mBox.setIcon(icon)
+        if details:
+            mBox.setDetailedText(details)
+        mBox.setStandardButtons(btns)
+        buttonPressed = mBox.exec_()
+        return buttonPressed
