@@ -12,6 +12,7 @@ from .logic import utilities as util
 modulePath = util.modulePath(__name__)
 root = util.dirname(util.dirname(util.dirname(modulePath)))
 penPath = r"%s\icons\pen"%root
+prefFile = util.prefFile()
 
 class PaintArea(QLabel):
     def __init__(self, parentWin = None):
@@ -32,17 +33,15 @@ class PaintArea(QLabel):
         self.penSize = 3
         self.setPenColor('Black')
         self.start = self.end = None
-        
+
     def setPenColor(self, color):
         self.penColor = self.colors[color]
         self.pen = QPen(self.penColor, self.penSize, Qt.SolidLine,
                         Qt.RoundCap, Qt.RoundJoin)
-        imageName = color + ".png"
-        imageName = imageName.replace(' ', '')
-        path = util.join(penPath, imageName) 
+        path = util.penPixPath(penPath, color) 
         self.cursorPixmap = path
         self.setPenSize(self.penSize)
-    
+
     def setPenSize(self, size):
         self.penSize = size
         self.pen = QPen(self.penColor, self.penSize, Qt.SolidLine,
@@ -52,19 +51,6 @@ class PaintArea(QLabel):
         pix = pix.scaled(size, size, Qt.KeepAspectRatio,
                          Qt.SmoothTransformation)
         self.setCursor(QCursor(pix, 0, size))
-        
-    def undo(self):
-        pass
-
-    def saveImage(self):
-        self.pix.save('D:/My/test/hello.png', None, 100)
-    
-    def isModified(self):
-        return self.modified
-    
-    def clearImage(self):
-        
-        self.modified = True
             
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -110,6 +96,7 @@ class PaintArea(QLabel):
             painter.drawLine(self.start, self.end)
         painter.end()
         self.update()
+        self.modified = True
             
 Form, Base = uic.loadUiType('%s\ui\preferences.ui'%root)
 class Preferences(Form, Base):
@@ -117,6 +104,52 @@ class Preferences(Form, Base):
     def __init__(self, parentWin = None):
         super(Preferences, self).__init__(parentWin)
         self.setupUi(self)
+        self.parentWin = parentWin
+        self.alwaysAskButton.clicked.connect(self.switchPathBox)
+        self.alwaysSaveButton.clicked.connect(self.switchPathBox)
+        self.browseButton.clicked.connect(self.setPathBoxText)
+        self.saveButton.clicked.connect(self.save)
+        self.cancelButton.clicked.connect(self.close)
+        regex = QRegExp('\\w+')
+        validator = QRegExpValidator(regex, self)
+        self.fileNameBox.setValidator(validator)
+        
+    def switchPathBox(self):
+        flag = self.alwaysSaveButton.isChecked()
+        self.pathBox.setEnabled(flag)
+        self.browseButton.setEnabled(flag)
+        self.fileNameBox.setEnabled(flag)
+        
+    def setPathBoxText(self):
+        path = folderDialog(self.parentWin)
+        if path:
+            self.pathBox.setText(path)
+        
+    def save(self):
+        alwaysAsk = self.alwaysAskButton.isChecked()
+        alwaysSave = self.alwaysSaveButton.isChecked()
+        path = None
+        fileName = None
+        if alwaysSave:
+            path = str(self.pathBox.text())
+            if not path or not util.exists(path):
+                msgBox(self.parentWin,
+                       msg = 'The system can not find the path specified',
+                       icon = QMessageBox.Information)
+                return
+            fileName = str(self.fileNameBox.text())
+            if not fileName:
+                msgBox(self.parentWin, msg = 'File name must be spedified in'+
+                       ' order to save the file',
+                       icon = QMessageBox.Information)
+                return
+        pref = {'alwaysAsk': alwaysAsk, 'alwaysSave': alwaysSave,
+                'path': path, 'fileName': fileName}
+        fd = open(prefFile, 'w')
+        fd.write(str(pref))
+        fd.close()
+        self.close()
+        
             
 class Menu(QMenu):
     
@@ -129,7 +162,10 @@ class Menu(QMenu):
         # create main actions
         penColorAct = QAction('Pen Color', self)
         self.addAction(penColorAct)
-        moreActs = ['Preferences', 'Help', 'Cancel']
+        moreActs = ['Preferences', 'Open', 'Save',
+                    'Help', 'Close']
+        for act in moreActs:
+            self.addAction(QAction(act, self))
         # connect main actions to functions
         acts = self.actions()
         map(lambda act: act.triggered.connect(lambda: self.handleActs(act)),
@@ -140,13 +176,18 @@ class Menu(QMenu):
                      'Dark Green','Blue', 'Dark Blue', 'Cyan', 'Dark Cyan',
                      'Yellow', 'Dark Yellow']
         # add color actions to pen color menu
-        for act in colorActs:
-            menu.addAction(QAction(act, self))
+        for name in colorActs:
+            act = QAction(name, self)
+            menu.addAction(act)
+            act.setIcon(QIcon(self.colorIcon(name)))
         penColorAct.setMenu(menu)
         colorActions = menu.actions()
         # connect pen color actions to function
         map(lambda act: act.triggered.connect
             (lambda: self.handleColorActs(act)), colorActions)
+        
+    def colorIcon(self, name):
+        return util.penPixPath(penPath, name)
         
     def handleColorActs(self, act):
         text = str(act.text())
@@ -154,14 +195,39 @@ class Menu(QMenu):
         
     def handleActs(self, act):
         text = act.text()
+        if text == 'Preferences':
+            win = Preferences(self.parentWin)
+            win.show()
+        if text == 'Open':
+            self.parentWin.openFile()
+        if text == 'Save':
+            self.parentWin.saveFile()
+        if text == 'Save As...':
+            self.parentWin.saveAsFile()
+        if text == 'Clear':
+            self.parentWin.clearImage()
+        if text == 'Help':
+            self.parentWin.showHelp()
+        if text == 'Close':
+            self.parentWin.closeWin()
         
         
         
-def saveDialog():
-    pass
+def saveFileDialog(parent = None):
+    fileName = QFileDialog.getSaveFileName(parent, 'Save file', '', '*.png')
+    if fileName: return str(fileName)
+    else: return None
 
-def openDialog():
-    pass
+def openFileDialog(parent):
+    fileName = QFileDialog.getOpenFileName(parent, 'Open Image', '', '*.png')
+    if fileName: return str(fileName)
+    else: return None
+    
+def folderDialog(parent):
+    name = QFileDialog.getExistingDirectory(parent, 'Select Directory', '',
+                                     QFileDialog.ShowDirsOnly)
+    if name: return str(name)
+    else: return None
         
 def msgBox(parent, msg = None, btns = QMessageBox.Ok,
            icon = None, ques = None, details = None, title = 'paintDesk'):
