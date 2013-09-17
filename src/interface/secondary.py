@@ -113,12 +113,32 @@ class Preferences(Form, Base):
         regex = QRegExp('\\w+')
         validator = QRegExpValidator(regex, self)
         self.fileNameBox.setValidator(validator)
+        self.loadPreferences()
+        
+    def loadPreferences(self):
+        fd = open(prefFile)
+        data = fd.read()
+        if not data: return
+        prefs = eval(data)
+        if prefs['alwaysAsk']:
+            return
+        self.alwaysSaveButton.setChecked(True)
+        if prefs['path']:
+            self.pathBox.setText(prefs['path'])
+            self.pathBox.setEnabled(True)
+            self.browseButton.setEnabled(True)
+        if prefs['fileName']:
+            self.fileNameBox.setText(prefs['fileName'])
+            self.fileNameBox.setEnabled(True)
         
     def switchPathBox(self):
         flag = self.alwaysSaveButton.isChecked()
         self.pathBox.setEnabled(flag)
         self.browseButton.setEnabled(flag)
         self.fileNameBox.setEnabled(flag)
+        if not flag:
+            self.pathBox.clear()
+            self.fileNameBox.clear()
         
     def setPathBoxText(self):
         path = folderDialog(self.parentWin)

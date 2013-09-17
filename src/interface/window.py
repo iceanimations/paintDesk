@@ -86,6 +86,7 @@ class Window(QWidget):
             win.exec_()
             fd.seek(0)
             data = fd.read()
+            fd.close()
             if not data: return
         prefs = eval(data)
         if prefs['alwaysAsk']:
