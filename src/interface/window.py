@@ -70,7 +70,8 @@ class Window(QWidget):
     def saveFile(self):
         if self.fileName:
             if not self.saveImage():
-                sec.msgBox(self, msg = 'File not saveed, check preferences',
+                sec.msgBox(self, msg = 'File not saveed, check preferences'+
+                           ' or path that you specified',
                            icon = QMessageBox.Information)
                 return False
             self.paintArea.modified = False
@@ -90,13 +91,7 @@ class Window(QWidget):
             if not data: return
         prefs = eval(data)
         if prefs['alwaysAsk']:
-            path = sec.saveFileDialog(self)
-            if path:
-                path = util.splitext(path)[0]
-                self.fileName = path + '.png'
-                self.saveImage()
-                return True
-            else: return False
+            return self.saveAsFile()
         elif prefs['alwaysSave']:
             path = prefs['path']
             if not path or not util.exists(path):
@@ -115,6 +110,15 @@ class Window(QWidget):
                 self.fileName = util.join(path, uniqueFileName + '.png')
                 self.saveImage()
                 return True
+
+    def saveAsFile(self):
+        path = sec.saveFileDialog(self)
+        if path:
+            path = util.splitext(path)[0]
+            self.fileName = path + '.png'
+            self.saveImage()
+            return True
+        else: return False
 
     def clearImage(self):
         if self.paintArea.modified:

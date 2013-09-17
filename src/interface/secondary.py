@@ -182,7 +182,7 @@ class Menu(QMenu):
         # create main actions
         penColorAct = QAction('Pen Color', self)
         self.addAction(penColorAct)
-        moreActs = ['Preferences', 'Open', 'Save',
+        moreActs = ['Preferences', 'Open', 'Save', 'Save As...',
                     'Help', 'Close']
         for act in moreActs:
             self.addAction(QAction(act, self))
