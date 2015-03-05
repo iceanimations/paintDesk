@@ -7,6 +7,17 @@ import os
 osp = os.path
 import sys
 from PyQt4.QtCore import *
+import ctypes
+
+def tempPath():
+    tmp = unicode(os.path.expandvars("$TMP"))
+    GetLongPathName = ctypes.windll.kernel32.GetLongPathNameW
+    buff = ctypes.create_unicode_buffer(GetLongPathName(tmp, 0, 0))
+    GetLongPathName(tmp, buff, len(buff))
+    temp = buff.value
+    imagePath = osp.join(temp, 'testImage.png')
+    imagePath = imagePath.replace(r"\\", "\\").replace("\\","/")
+    return imagePath
 
 def modulePath(name):
     '''returns the path to the module "name"'''

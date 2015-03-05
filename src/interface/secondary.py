@@ -5,6 +5,8 @@ Created on Sep 12, 2013
 '''
 import site
 site.addsitedir(r"R:/Python_Scripts")
+site.addsitedir(r"R:\Pipe_Repo\Users\Hussain\packages\iutilities")
+import iutilities as utl
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 from PyQt4 import uic
@@ -22,7 +24,14 @@ class PaintArea(QLabel):
         self.image = QImage()
         self.mouseDown = False
         self.points = []
-        self.pix = QPixmap.grabWindow(QApplication.desktop().winId())
+        self.eraser = False
+        self.backPix = QPixmap.grabWindow(QApplication.desktop().winId())
+        imagePath = util.tempPath()
+        self.backPix.save(imagePath, None, 100)
+        self.setStyleSheet("background-image: url(%s)"%imagePath)
+        self.pix = QPixmap(self.backPix.size())
+        self.pix.fill(QColor(0,0,0, alpha = 0))
+        
         self.colors = {'White': Qt.white, 'Black': Qt.black, 'Red': Qt.red,
               'Dark Red': Qt.darkRed, 'Green': Qt.green,
               'Dark Green': Qt.darkGreen, 'Blue': Qt.blue,
@@ -31,6 +40,7 @@ class PaintArea(QLabel):
               'Dark Magenta': Qt.darkMagenta, 'Yellow': Qt.yellow,
               'Dark Yellow': Qt.darkYellow}
         self.penSize = 3
+        self.eraserSize = 2
         self.setPenColor('Black')
         self.start = self.end = None
 
@@ -51,6 +61,15 @@ class PaintArea(QLabel):
         pix = pix.scaled(size, size, Qt.KeepAspectRatio,
                          Qt.SmoothTransformation)
         self.setCursor(QCursor(pix, 0, size))
+        self.eraser = False
+        self.cursor().setPos(QCursor.pos())
+        
+    def setEraserSize(self, size):
+        self.eraserSize = size
+        path = r"%s\icons\eraser\eraser"%root
+        path = path + str(size*16) + ".png"
+        self.setCursor(QCursor(QPixmap(path), 0,0))
+        self.cursor().setPos(QCursor.pos())
             
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -58,6 +77,14 @@ class PaintArea(QLabel):
         
     def wheelEvent(self, event):
         delta = event.delta()
+        if not self.eraser:
+            self.changePenSize(delta)
+        else:
+            self.changeEraserSize(delta)
+        # hack to handle the display bug of not resizing the cursor
+        self.cursor().setPos(self.cursor().pos())
+    
+    def changePenSize(self, delta):
         penSize = self.penSize
         if delta < 0:
             if penSize > 1:
@@ -65,15 +92,24 @@ class PaintArea(QLabel):
         if delta > 0:
             if penSize < 20:
                 self.setPenSize(penSize + 1)
-        # hack to handle the display bug of not resizing the cursor
-        self.cursor().setPos(self.cursor().pos())
+        self.eraser = False
+                
+    def changeEraserSize(self, delta):
+        size = self.eraserSize
+        if delta < 0:
+            if size > 1:
+                self.setEraserSize(size - 1)
+        if delta > 0:
+            if size < 6:
+                self.setEraserSize(size + 1)
     
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.mouseDown = True
             self.end = self.start = event.pos()
+            self.pushUndoCommand(UndoCommand(self.pix, self))
             self.paint()
-        
+            
     def mouseMoveEvent(self, event):
         if self.mouseDown:
             self.end = event.pos()
@@ -84,19 +120,33 @@ class PaintArea(QLabel):
         if event.button() == Qt.LeftButton:
             self.mouseDown = False
         if event.button() == Qt.RightButton:
-            self.menu = Menu(self.parentWin)
-            self.menu.popup(QCursor.pos())
+            self.parentWin.menu.popup(QCursor.pos())
         
     def paint(self):
         painter = QPainter(self.pix)
         painter.setPen(self.pen)
         if self.start == self.end:
-            painter.drawPoint(self.start)
+            if self.eraser:
+                self.erase(painter)
+            else:
+                painter.drawPoint(self.start)
         else:
-            painter.drawLine(self.start, self.end)
+            if self.eraser:
+                self.erase(painter)
+            else:
+                painter.drawLine(self.start, self.end)
         painter.end()
         self.update()
         self.modified = True
+        
+    def erase(self, painter):
+        rect = QRect(self.cursor().pos(), self.cursor().pixmap().size())
+        cpix = self.backPix.copy(rect)
+        painter.drawPixmap(rect.topLeft(), cpix)
+        
+    def pushUndoCommand(self, command):
+        if command:
+            self.parentWin.undoStack.push(command)
             
 Form, Base = uic.loadUiType('%s\ui\preferences.ui'%root)
 class Preferences(Form, Base):
@@ -180,12 +230,42 @@ class Menu(QMenu):
     
     def setActions(self):
         # create main actions
-        penColorAct = QAction('Pen Color', self)
+        penColorAct = QAction('Pen Color', self.parentWin)
+        penColorAct.setShortcutContext(Qt.ApplicationShortcut)
         self.addAction(penColorAct)
-        moreActs = ['Preferences', 'Open', 'Save', 'Save As...',
-                    'Help', 'Close']
+        eraserAct = QAction('Eraser', self.parentWin)
+        self.addAction(eraserAct)
+        eraserAct.setShortcut(QKeySequence(Qt.Key_E))
+        self.addSeparator()
+        moreActs = ['New', 'Open', 'Save', 'Save As...', 'Preferences',
+                    'Help', 'Clear', 'Exit']
         for act in moreActs:
-            self.addAction(QAction(act, self))
+            actObj = QAction(act, self.parentWin)
+            self.addAction(actObj)
+            if act == 'Preferences':
+                actObj.setShortcut(QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_P))
+            if act == 'Save As...':
+                self.addSeparator()
+            if act == 'New':
+                actObj.setShortcut(QKeySequence(QKeySequence(QKeySequence.New)))
+            if act == 'Open':
+                actObj.setShortcut(QKeySequence(QKeySequence.Open))
+            if act == 'Save':
+                actObj.setShortcut(QKeySequence(QKeySequence.Save))
+            if act == 'Help':
+                actObj.setShortcut(QKeySequence(QKeySequence.HelpContents))
+                self.addSeparator()
+                undoAction = self.parentWin.undoStack.createUndoAction(self.parentWin, 'Undo')
+                self.addAction(undoAction)
+                undoAction.setShortcut(QKeySequence(QKeySequence.Undo))
+                redoAction = self.parentWin.undoStack.createRedoAction(self.parentWin, 'Redo')
+                redoAction.setShortcut(QKeySequence(QKeySequence.Redo))
+                self.addAction(redoAction)
+                self.addSeparator()
+            if act == 'Clear':
+                actObj.setShortcut(QKeySequence(QKeySequence.Delete))
+            if act == 'Exit':
+                actObj.setShortcut(QKeySequence(Qt.Key_Escape))
         # connect main actions to functions
         acts = self.actions()
         map(lambda act: act.triggered.connect(lambda: self.handleActs(act)),
@@ -218,6 +298,12 @@ class Menu(QMenu):
         if text == 'Preferences':
             win = Preferences(self.parentWin)
             win.show()
+        if text == 'Eraser':
+            self.parentWin.paintArea.setEraserSize(self.parentWin.paintArea.eraserSize)
+            self.parentWin.paintArea.eraser = True
+        if text == 'New':
+            self.parentWin.createNew()
+            self.parentWin.fileName = ''
         if text == 'Open':
             self.parentWin.openFile()
         if text == 'Save':
@@ -225,12 +311,28 @@ class Menu(QMenu):
         if text == 'Save As...':
             self.parentWin.saveAsFile()
         if text == 'Clear':
-            self.parentWin.clearImage()
+            self.parentWin.createNew()
         if text == 'Help':
             self.parentWin.showHelp()
-        if text == 'Close':
+        if text == 'Exit':
             self.parentWin.closeWin()
         
+class UndoCommand(QUndoCommand):
+    def __init__(self, img, paintArea, parent = None):
+        super(UndoCommand, self).__init__(parent)
+        self.prevPix = QPixmap(img)
+        self.currentPix = QPixmap(self.prevPix)
+        self.paintArea = paintArea
+        
+    def undo(self):
+        self.currentPix = QPixmap(self.paintArea.pix)
+        self.paintArea.pix = self.prevPix
+        self.paintArea.update()
+    
+    def redo(self):
+        self.paintArea.pix = self.currentPix
+        self.paintArea.update()
+    
         
         
 def saveFileDialog(parent = None):
